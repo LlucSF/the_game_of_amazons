@@ -18,6 +18,7 @@ If you want to install the packages manually, just installing pygame==1.9.6 and 
 
 ## About the game
 History and rules: https://en.wikipedia.org/wiki/Game_of_the_Amazons
+
 Explanation video by Numberphile: https://www.youtube.com/watch?v=kjSOSeRZVNg&t=308s
 
 
