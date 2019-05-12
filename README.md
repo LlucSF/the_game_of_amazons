@@ -1,6 +1,12 @@
 # myAmazons
 Python self-learning project based on the board game called The game of amazons, invented in 1988 by Walter Zamkauskas of Argentina. Written in python using the pygame and networkx libraries.
 
+<p align="center">
+<img src="https://github.com/LlucSF/myAmazons/blob/master/img/cells_6.PNG" width="500">
+<img src="https://github.com/LlucSF/myAmazons/blob/master/img/cells_8.PNG" width="500">
+<img src="https://github.com/LlucSF/myAmazons/blob/master/img/cells_10.PNG" width="500">
+<p/>
+
 ## Installation
 In order to play the game you just need to run the script, but first you need the packages included in the requirements.txt file.
 I recommend creating a new venv and installing there the packages:
