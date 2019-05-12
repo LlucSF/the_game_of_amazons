@@ -1,4 +1,4 @@
-# TheAmazonGame
+# myAmazons - My implementation of the game of amazons in python 
 Python self-learning project based on the board game called The game of amazons, invented in 1988 by Walter Zamkauskas of Argentina. Written in python using the pygame and networkx libraries.
 
 ## Installation
