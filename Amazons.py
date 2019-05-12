@@ -8,7 +8,9 @@ Created on Tue May  7 17:01:15 2019
 import pygame
 import pygame.freetype
 import copy
+import networkx as nx
 from math import trunc
+from numpy import zeros
 
 
 class BoardUtilities:  # global class containing general utilites for other classes
@@ -139,14 +141,15 @@ class Player:
         self.name = player_name
         self.amazons_IDs = []
         self.number_of_amazons = number_of_amazons
+        self.looser = False
 
     def add_score(self, new_score):
         self.score = self.score + new_score
 
 
 class Game(BoardUtilities):
-    def __init__(self, max_score, list_of_names, previous_scores, first_player, cells_per_side):
-        self.play_again = True
+    def __init__(self, max_score, list_of_names, previous_scores, first_player, cells_per_side, load_game, saved_game):
+        self.play_again = False
         self.max_score = max_score
         self.cells_per_side = cells_per_side
         self.surface_sz = 600  # surface is gonna be 600x600
@@ -165,63 +168,49 @@ class Game(BoardUtilities):
         self.players[first_player].active = True
         # game's amazon instances list
         self.amazons = []
-        self.board_data = self.fill_new_board()
+        if load_game:
+            self.board_data = saved_game
+        else:
+            self.board_data, self.board_names = self.fill_new_board()
 
-    def next_turn(self, _id):  # Exchange the turn
-        for i in range(2):
-            if self.players[i].active:
-                self.players[i].active = False
+    # Exchanges the active players, refresh the immobilized amazon numbers and check if there's already a winner
+    def next_turn(self):  # Exchange the turn
+        for player in self.players:
+            if player.active:
+                player.active = False
             else:
-                self.players[i].active = True
-        self.amazons[_id].shoot_done = False
-        self.check_immobilized_amazons()
-        self.check_game()
+                player.active = True
 
-    def check_game(self):
+        for amazon in self.amazons:
+            amazon.shoot_done = False
+
+        self.check_immobilized_amazons()
+        self.check_end_game()
+
+    # Check if there's a player without movable amazons.
+    def check_end_game(self):
         for i in self.players:
             if i.number_of_amazons == 0:
+                i.looser = True
                 self.end_game = True
 
+    # Check if there's any new immobilized amazon in the current turn or any of them can move again.
     def check_immobilized_amazons(self):
         for i in self.amazons:
-            number_of_blocked_cells = 0
-
-            if i.row != 0:
-                up_row = i.row - 1
-            else:
-                up_row = 0
-
-            if i.row != self.cells_per_side - 1:
-                down_row = i.row + 1
-            else:
-                down_row = self.cells_per_side - 1
-
-            if i.column != 0:
-                left_column = i.column - 1
-            else:
-                left_column = 0
-
-            if i.column != self.cells_per_side - 1:
-                right_column = i.column + 1
-            else:
-                right_column = self.cells_per_side - 1
-
-            for row in range(up_row, down_row + 1):
-                for col in range(left_column, right_column + 1):
-                    if self.board_data[row][col] != 0:
-                        number_of_blocked_cells += 1
-            if number_of_blocked_cells == (down_row + 1 - up_row) * (right_column + 1 - left_column):
+            if len(self.check_cell_surroundings(i.row, i.column)) == 0:
                 if i.can_move:
                     i.can_move = False
                     self.players[i.player-1].number_of_amazons -= 1
                     print("Amazon", str(i.id), "of player", i.player, "can't move")
                     print("Player", i.player, "can still move", self.players[i.player-1].number_of_amazons, "amazons")
+
             elif not i.can_move:
                 i.can_move = True
                 self.players[i.player-1].number_of_amazons += 1
                 print("Amazon", str(i.id), "of player", i.player, "can move again!")
                 print("Player", i.player, "now move", self.players[i.player - 1].number_of_amazons, "amazons")
 
+    # Starting function of the game.
     def start_and_play_new_game(self):
         pygame.init()  # Prepare the pygame module for use
         pygame.display.set_caption("LlucSF's Amazons")
@@ -239,22 +228,23 @@ class Game(BoardUtilities):
                 if ev.type == pygame.MOUSEBUTTONUP:
                     clicked_cell = self.get_cell_from_click()
                     if clicked_cell:
-                        _id = self.amazon_in_cell(clicked_cell)
-                        if _id >= 0:
-                            if self.players[self.amazons[_id].player - 1].active and self.amazons[_id].can_move:
+                        amz_id = self.amazon_in_cell(clicked_cell[0], clicked_cell[1])
+                        if amz_id >= 0:
+                            if self.players[self.amazons[amz_id].player - 1].active and self.amazons[amz_id].can_move:
                                 new_event = True
-                                self.amazons[_id].active = True
+                                self.amazons[amz_id].active = True
                                 board_before_move = copy.deepcopy(self.board_data)
-                                pre_pos_amz = (self.amazons[_id].row, self.amazons[_id].column)
+                                pre_pos_amz = (self.amazons[amz_id].row, self.amazons[amz_id].column)
                                 self.draw_board()  # redraw to show the active amazon
-                                self.board_data = self.amazons[_id].move_amazon(
+                                self.board_data = self.amazons[amz_id].move_amazon(
                                     self.board_data)  # check if the move is legal and overwrites the board
-                                if self.amazons[_id].r_shoot:  # player has move it
+                                if self.amazons[amz_id].r_shoot:  # player has move it
                                     self.draw_board()  # redraw to show the ready to shoot amazon
-                                    self.board_data = self.amazons[_id].shoot_fire_arrow(self.board_data,
-                                                                                         board_before_move, pre_pos_amz)
-                                    if self.amazons[_id].shoot_done:
-                                        self.next_turn(_id)
+                                    self.board_data = self.amazons[amz_id].shoot_fire_arrow(self.board_data,
+                                                                                            board_before_move,
+                                                                                            pre_pos_amz)
+                                    if self.amazons[amz_id].shoot_done:
+                                        self.next_turn()
 
                 if ev.type == pygame.KEYDOWN:
                     new_event = True
@@ -270,16 +260,34 @@ class Game(BoardUtilities):
 
             if self.end_game:
                 for i in self.players:
-                    if i.number_of_amazons != 0:
+                    if not i.looser:
                         print(i.name, "is the winner!")
+                        new_score = self.get_score_from_cells()
+                        print(new_score)
+                        i.add_score(new_score)
+                        if self.play_again:
+                            self.fill_new_board()
+                            self.start_and_play_new_game()
                         break
                 break
 
+        while True:
+            ev = pygame.event.poll()  # Look for any event
+            if ev.type != pygame.NOEVENT:
+                if ev.type == pygame.QUIT:  # Window close button clicked?
+                    break
         pygame.quit()  # Once we leave the loop, close the window.
 
+    # Returns a predefined board data and creates Amazon class instances.
     def fill_new_board(self):
         # Load the initial board for each allowed number of cells_per_side
-        if self.cells_per_side == 6:
+        if self.cells_per_side == 4:
+            board_data = [[0, 0, 1, 0],
+                          [0, 0, 0, 0],
+                          [0, 0, 0, 0],
+                          [0, 2, 0, 0]]
+
+        elif self.cells_per_side == 6:
             board_data = [[0, 0, 0, 1, 0, 0],
                           [0, 0, 0, 0, 0, 0],
                           [0, 0, 0, 0, 0, 1],
@@ -296,25 +304,49 @@ class Game(BoardUtilities):
                           [0, 0, 0, 0, 0, 0, 0, 2],
                           [2, 0, 0, 0, 0, 0, 0, 0],
                           [0, 0, 0, 0, 2, 0, 0, 0]]
+
+        elif self.cells_per_side == 10:
+            board_data = [[0, 0, 0, 1, 0, 0, 1, 0, 0, 0],
+                          [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                          [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                          [1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+                          [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                          [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                          [2, 0, 0, 0, 0, 0, 0, 0, 0, 2],
+                          [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                          [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                          [0, 0, 0, 2, 0, 0, 2, 0, 0, 0]]
+
         else:
-            return print("Only 6x6 and 8x8 games are allowed")
+            return print("Only 6x6 ,8x8 and 10x10 games are allowed")
+
+        board_names = zeros((self.cells_per_side, self.cells_per_side))
+        name_cnt = 0
+        for row in range(0, self.cells_per_side):
+            for col in range(0, self.cells_per_side):
+                board_names[row][col] = name_cnt
+                name_cnt += 1
 
         # fill the amazon instances with the board data
-        _id = 0
+        amzn_id = 0
         for i in range(self.cells_per_side):
             for j in range(self.cells_per_side):
                 if board_data[i][j] == 1:
-                    self.amazons.append(Amazon(i, j, 1, _id, self.margin, self.cell_size, self.cells_per_side))
-                    _id = _id + 1
+                    self.amazons.append(Amazon(i, j, 1, amzn_id, self.margin, self.cell_size, self.cells_per_side))
+                    self.players[0].amazons_IDs.append(amzn_id)
+                    amzn_id = amzn_id + 1
                 if board_data[i][j] == 2:
-                    self.amazons.append(Amazon(i, j, 2, _id, self.margin, self.cell_size, self.cells_per_side))
-                    _id = _id + 1
-        return board_data
+                    self.amazons.append(Amazon(i, j, 2, amzn_id, self.margin, self.cell_size, self.cells_per_side))
+                    self.players[0].amazons_IDs.append(amzn_id)
+                    amzn_id = amzn_id + 1
 
+        return board_data, board_names
+
+    # Draw all the graphics of the game
     def draw_board(self):
         # define colours in rgb
-        white, turquoise, red = (224, 255, 255), (95, 158, 160), (255, 0, 0)
-        black, player1, player2 = (0, 0, 0), (182, 213, 59), (163, 97, 44)
+        white, light_blue, turquoise, red = (255, 255, 255), (224, 255, 255), (95, 158, 160), (255, 0, 0)
+        black, player1, player2, grey = (0, 0, 0), (182, 213, 59), (163, 97, 44), (175, 175, 175)
 
         # painting the surface, the contour of the board and creating the text elements
         self.surface.fill(white)
@@ -327,27 +359,50 @@ class Game(BoardUtilities):
             my_font.render(str(self.players[0].name) + "'s score:  " + str(self.players[0].score), False, (0, 0, 0)))
         text_surface.append(
             my_font.render(str(self.players[1].name) + "'s score:  " + str(self.players[1].score), False, (0, 0, 0)))
+
         for i in self.players:
             if i.active:
                 if i.number == 0:
-                    text_surface.append(my_font.render(str(i.name) + "'s turn. Kiwi move.", False, (0, 0, 0)))
+                    text_surface.append(my_font.render(str(i.name) + "'s turn. Kiwi amazons move.", False, (0, 0, 0)))
                 else:
-                    text_surface.append(my_font.render(str(i.name) + "'s turn. Coco move.", False, (0, 0, 0)))
+                    text_surface.append(my_font.render(str(i.name) + "'s turn. Coco amazons move.", False, (0, 0, 0)))
 
-                    # painting the floor like a chess board
-        for i in range(0, self.cells_per_side, 2):
-            for j in range(0, self.cells_per_side, 2):
+        # painting the floor like a chess board
+        for row in range(0, self.cells_per_side, 2):
+            for col in range(0, self.cells_per_side, 2):
                 small_rect = (
-                    self.board_origin + (self.cell_size * i), self.board_origin + (self.cell_size * j), self.cell_size,
+                    self.board_origin + (self.cell_size * col),
+                    self.board_origin + (self.cell_size * row),
+                    self.cell_size,
                     self.cell_size)
-                self.surface.fill(turquoise, small_rect)
+                self.surface.fill(grey, small_rect)
 
-        for i in range(1, self.cells_per_side + 1, 2):
-            for j in range(1, self.cells_per_side + 1, 2):
+        for row in range(1, self.cells_per_side + 1, 2):
+            for col in range(1, self.cells_per_side + 1, 2):
                 small_rect = (
-                    self.board_origin + (self.cell_size * i), self.board_origin + (self.cell_size * j), self.cell_size,
+                    self.board_origin + (self.cell_size * col),
+                    self.board_origin + (self.cell_size * row),
+                    self.cell_size,
                     self.cell_size)
-                self.surface.fill(turquoise, small_rect)
+                self.surface.fill(grey, small_rect)
+
+        for row in range(0, self.cells_per_side, 2):
+            for col in range(1, self.cells_per_side + 1, 2):
+                small_rect = (
+                    self.board_origin + (self.cell_size * col),
+                    self.board_origin + (self.cell_size * row),
+                    self.cell_size,
+                    self.cell_size)
+                self.surface.fill(white, small_rect)
+
+        for row in range(1, self.cells_per_side, 2):
+            for col in range(0, self.cells_per_side, 2):
+                small_rect = (
+                    self.board_origin + (self.cell_size * col),
+                    self.board_origin + (self.cell_size * row),
+                    self.cell_size,
+                    self.cell_size)
+                self.surface.fill(white, small_rect)
 
         # painting amazons and fires
         for column in range(self.cells_per_side):
@@ -363,31 +418,20 @@ class Game(BoardUtilities):
                     pygame.draw.circle(self.surface, player2, amazon, round(self.cell_size / 3))
 
                 if self.board_data[row][column] == 3:
-                    l1_s = (self.board_origin + (self.cell_size * column),
-                            self.board_origin + (self.cell_size * row))
-                    l1_e = (self.board_origin + (self.cell_size * (column + 1)) - 1,
-                            self.board_origin + (self.cell_size * (row + 1)) - 1)
-                    l2_s = (self.board_origin + (self.cell_size * column),
-                            self.board_origin + (self.cell_size * (row + 1)) - 1)
-                    l2_e = (self.board_origin + (self.cell_size * (column + 1)) - 1,
-                            self.board_origin + (self.cell_size * row))
-                    fire_arrow = (int(self.board_origin + (self.cell_size * column) + round(self.cell_size / 2)),
-                              int(self.board_origin + (self.cell_size * row) + round(self.cell_size / 2)))
-                    pygame.draw.circle(self.surface, red, fire_arrow, round(self.cell_size / 6))
+                    l1_s = (self.board_origin + (self.cell_size * column) + (self.cell_size/5),
+                            self.board_origin + (self.cell_size * row) + (self.cell_size/5))
 
-                    #l3_s = (self.board_origin + (self.cell_size * column) + round(self.cell_size/2),
-                    #       self.board_origin + (self.cell_size * row))
-                    #l3_e = (self.board_origin + (self.cell_size * column) + round(self.cell_size/2),
-                    #        self.board_origin + (self.cell_size * (row + 1)))
-                    #l4_s = (self.board_origin + (self.cell_size * column),
-                    #        self.board_origin + (self.cell_size * row) + round(self.cell_size/2))
-                    #l4_e = (self.board_origin + (self.cell_size * (column + 1)),
-                    #        self.board_origin + (self.cell_size * row) + round(self.cell_size/2) - 1)
+                    l1_e = (self.board_origin + (self.cell_size * column) + (4*self.cell_size/5),
+                            self.board_origin + (self.cell_size * row) + (4*self.cell_size/5))
 
-                    pygame.draw.line(self.surface, red, l1_s, l1_e, 2)
-                    pygame.draw.line(self.surface, red, l2_s, l2_e, 2)
-                    #pygame.draw.line(self.surface, red, l3_s, l3_e, 1)
-                    #pygame.draw.line(self.surface, red, l4_s, l4_e, 1)
+                    l2_s = (self.board_origin + (self.cell_size * column) + (4*self.cell_size/5),
+                            self.board_origin + (self.cell_size * row) + (self.cell_size/5))
+
+                    l2_e = (self.board_origin + (self.cell_size * column) + (self.cell_size/5),
+                            self.board_origin + (self.cell_size * row) + (4*self.cell_size/5))
+
+                    pygame.draw.line(self.surface, red, l1_s, l1_e, 5)
+                    pygame.draw.line(self.surface, red, l2_s, l2_e, 5)
 
         # painting active amazons different
         for i in range(self.total_number_of_amazons):
@@ -406,25 +450,89 @@ class Game(BoardUtilities):
         self.surface.blit(text_surface[2], (int(round(self.surface_sz / 2)), 10))
         pygame.display.flip()
 
-    def amazon_in_cell(self, cell_position):
-        _id = 0
+    # For a given cell_row and cell_column, checks if there's an amazon,
+    def amazon_in_cell(self, cell_row, cell_column):
         for i in self.amazons:
-            if i.row == cell_position[0] and i.column == cell_position[1] and i.can_move:
-                return _id  # If there is an amazon, time to move it!
-            _id = _id + 1
+            if i.row == cell_row and i.column == cell_column and i.can_move:
+                return i.id
         return -1
 
+    # Checks the surroundings of a cell.
+    # Returns a list of the surrounding empty cells if any, else returns logic False
+    def check_cell_surroundings(self, cell_row, cell_column):
+
+        # List containing the empty cells surrounding cell (cell_row, cell_column)
+        empty_cells = []
+
+        # Establishing the neighborhood indexes of the cell
+        if cell_row != 0:
+            up_row = cell_row - 1
+        else:
+            up_row = 0
+
+        if cell_row != self.cells_per_side - 1:
+            down_row = cell_row + 1
+        else:
+            down_row = self.cells_per_side - 1
+
+        if cell_column != 0:
+            left_column = cell_column - 1
+        else:
+            left_column = 0
+
+        if cell_column != self.cells_per_side - 1:
+            right_column = cell_column + 1
+        else:
+            right_column = self.cells_per_side - 1
+
+        # Check for each cell in the neighborhood if its empty, if true then append it to the list
+        for row in range(up_row, down_row + 1):
+            for col in range(left_column, right_column + 1):
+                if self.board_data[row][col] == 0:
+                    empty_cells.append((row, col))
+        return empty_cells
+
+    # Score calculating function
+    def get_score_from_cells(self):
+        for player in self.players:
+            if not player.looser:
+                score_graph = nx.Graph()
+                graph_size = 0
+                for winner_amazon in player.amazons_IDs:
+                    if self.amazons[winner_amazon].can_move:
+                        is_graph_growing = True
+                        row = self.amazons[winner_amazon].row
+                        col = self.amazons[winner_amazon].column
+                        while is_graph_growing:
+                            empty_neighbors = self.check_cell_surroundings(row, col)
+                            for neighbor_row, neighbor_col in empty_neighbors:
+                                # score_graph.add_node(int(self.board_names[neighbor_row][neighbor_col]))
+                                score_graph.add_node((neighbor_row, neighbor_col))
+                                if graph_size < score_graph.number_of_nodes():
+                                    graph_size = score_graph.number_of_nodes()
+                                else:
+                                    is_graph_growing = False
+
+        return graph_size
 
 ###############################################################################################################
 ###############################################################################################################
 ###############################################################################################################
 
-def main(names, scores, max_score, cells_per_side, first_player):
-    my_game = Game(max_score, names, scores, first_player - 1, cells_per_side)
+
+def main(names, scores, max_score, cells_per_side, first_player, load_game, saved_game):
+    my_game = Game(max_score, names, scores, first_player - 1, cells_per_side, load_game, saved_game)
     my_game.start_and_play_new_game()
     return "Bye"
 
 
-name = ["Lluc", "Júlia"]
+def score_counting_test(names, scores, max_score, cells_per_side, first_player, load_game, saved_game):
+    my_game = Game(max_score, names, scores, first_player - 1, cells_per_side, load_game, saved_game)
+    my_game.start_and_play_new_game()
+    return"Test done"
+
+
+name = ["Júlia", "Lluc"]
 score = [0, 0]
-main(name, score, 10, 6, 1)
+main(name, score, 10, 4, 2, False, None)
+
