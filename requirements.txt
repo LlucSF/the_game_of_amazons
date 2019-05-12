@@ -1,0 +1,5 @@
+certifi==2019.3.9
+decorator==4.4.0
+networkx==2.3
+pygame==1.9.6
+wincertstore==0.2
