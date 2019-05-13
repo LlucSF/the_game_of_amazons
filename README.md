@@ -12,7 +12,7 @@ In order to play the game you just need to run the script, but first you need th
 I recommend creating a new venv and installing there the packages:
 ```
 # Create a new venv using conda
-$ conda create -n amazons_env python=3.7.4
+$ conda create -n amazons_env python=3.7
 
 # Activate it
 $ conda activate amazons_env
