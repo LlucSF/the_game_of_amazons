@@ -1,155 +1,18 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Tue May  7 17:01:15 2019
 
-@author: LlucSF 
-"""
-
-import pygame
-import pygame.freetype
 import copy
 import networkx as nx
+import pygame
+import pygame.freetype
 from tkinter import Tk
 from tkinter.filedialog import askopenfilename
-from math import trunc
-
-
-class BoardUtilities:  # global class containing general utilites for other classes
-    def get_cell_from_click(self):
-        # Get mouse position and transform it into row/column
-        x_mouse, y_mouse = pygame.mouse.get_pos()
-        row = (y_mouse - round(self.margin / 2)) / self.cell_size
-        column = (x_mouse - round(self.margin / 2)) / self.cell_size
-
-        # check if the cell is out of the board
-        if row > 0 and trunc(row) < self.cells_per_side:
-            row = trunc(row)
-        else:
-            print("You are clicking out of the board!")
-            return False
-
-        if column > 0 and trunc(column) < self.cells_per_side:
-            column = trunc(column)
-        else:
-            print("You are clicking out of the board!")
-            return False
-        return row, column
-
-
-class Amazon(BoardUtilities):
-    def __init__(self, row, column, player, amazon_id, margin, cell_size, cell_per_side):
-        self.row = row
-        self.column = column
-        self.player = player
-        self.id = amazon_id
-        self.margin = margin
-        self.cell_size = cell_size
-        self.cells_per_side = cell_per_side
-        self.active = False
-        self.r_shoot = False
-        self.shoot_done = False
-        self.can_move = True
-
-    def move_amazon(self, board_data):
-        waiting_new_click = True
-        while waiting_new_click:
-            ev = pygame.event.poll()
-            if ev.type == pygame.MOUSEBUTTONUP:
-                pos = self.get_cell_from_click()
-                if pos:
-                    if self.is_move_legal(board_data, pos) == 1:
-                        waiting_new_click = False
-                        self.r_shoot = True  # make amazon ready to shoot
-                        board_data = self.overwrite_board(board_data, pos)
-                    elif self.is_move_legal(board_data, pos) == 2:  # Player wants to move another amazon
-                        self.active = False
-                        return board_data
-        return board_data
-
-    def shoot_fire_arrow(self, board_data, board_before_move, pre_pos_amz):
-        waiting_new_click = True
-        while waiting_new_click:
-            ev = pygame.event.poll()
-            if ev.type == pygame.MOUSEBUTTONUP:
-                pos = self.get_cell_from_click()
-                if pos:
-                    if self.is_move_legal(board_data, pos) == 1:
-                        waiting_new_click = False
-                        self.active = False
-                        self.r_shoot = False
-                        self.shoot_done = True
-                        board_data = self.overwrite_board(board_data, pos)
-                    elif self.is_move_legal(board_data, pos) == 2:
-                        self.active = False
-                        self.r_shoot = False
-                        self.row = pre_pos_amz[0]
-                        self.column = pre_pos_amz[1]
-                        return board_before_move
-        return board_data
-
-    def is_move_legal(self, board_data, new_pos):
-        row_diff = new_pos[0] - self.row
-        col_diff = new_pos[1] - self.column
-        if col_diff < 0:
-            step_col = -1
-        else:
-            step_col = 1
-
-        if row_diff < 0:
-            step_row = -1
-        else:
-            step_row = 1
-
-        if row_diff == 0 and col_diff == 0:
-            self.active = False
-            return 2  # 2 means unselected
-
-        if abs(row_diff) == abs(col_diff):
-            for i in range(1, abs(row_diff) + 1):
-                if board_data[self.row + (i * step_row)][self.column + (i * step_col)] != 0:
-                    return 0
-                return 1
-
-        if row_diff == 0 and col_diff != 0:
-            for i in range(self.column + step_col, new_pos[1] + step_col, step_col):
-                if board_data[self.row][i] != 0:
-                    return 0
-            return 1
-
-        if row_diff != 0 and col_diff == 0:
-            for i in range(self.row + step_row, new_pos[0] + step_row, step_row):
-                if board_data[i][self.column] != 0:
-                    return 0
-            return 1
-        return 0
-
-    def overwrite_board(self, board_data, new_pos):
-        if self.r_shoot:
-            board_data[new_pos[0]][new_pos[1]] = self.player
-            board_data[self.row][self.column] = 0
-            self.row = new_pos[0]
-            self.column = new_pos[1]
-        if self.shoot_done:
-            board_data[new_pos[0]][new_pos[1]] = 3
-        return board_data
-
-
-class Player:
-    def __init__(self, player_name, player_score, player_number, number_of_amazons):
-        self.score = player_score
-        self.active = False
-        self.number = player_number
-        self.name = player_name
-        self.amazons_IDs = []
-        self.number_of_amazons = number_of_amazons
-        self.winner = False
-
-    def add_score(self, new_score):
-        self.score = self.score + new_score
+from Classes.pygame_functions import *
+from .BoardUtilities import BoardUtilities
+from .Amazons import Amazon
+from .Player import Player
 
 
 class Game(BoardUtilities):
-    def __init__(self, max_score, list_of_names, previous_scores, first_player, cells_per_side):
+    def __init__(self, max_score, previous_scores, first_player, cells_per_side):
         self.play_again = True
         self.end_game = False
         self.its_a_draw = False
@@ -170,6 +33,9 @@ class Game(BoardUtilities):
 
         # Player instances
         self.players = []
+        list_of_names = []
+        list_of_names.append("Player 1")
+        list_of_names.append("Player 2")
         for i in range(2):
             self.players.append(Player(list_of_names[i], previous_scores[i], i, self.number_of_amazons_per_player))
         self.players[first_player].active = True
@@ -349,11 +215,11 @@ class Game(BoardUtilities):
             for j in range(0, self.cells_per_side):
                 if board_data[i][j] == 1:
                     self.amazons.append(Amazon(i, j, 1, amazon_id, self.margin, self.cell_size, self.cells_per_side))
-                    self.players[0].amazons_IDs.append(amazon_id)
+                    self.players[0].amazons_ids.append(amazon_id)
                     amazon_id = amazon_id + 1
                 if board_data[i][j] == 2:
                     self.amazons.append(Amazon(i, j, 2, amazon_id, self.margin, self.cell_size, self.cells_per_side))
-                    self.players[1].amazons_IDs.append(amazon_id)
+                    self.players[1].amazons_ids.append(amazon_id)
                     amazon_id = amazon_id + 1
         self.total_number_of_amazons = amazon_id
         return board_data
@@ -361,7 +227,7 @@ class Game(BoardUtilities):
     # Draw all the graphics of the game
     def draw_board(self):
         # Define colours in rgb
-        self.surface = pygame.display.set_mode((self.surface_sz, self.surface_sz))
+        self.surface = screenSize(self.surface_sz, self.surface_sz)
         white, light_blue, turquoise, red = (255, 255, 255), (224, 255, 255), (95, 158, 160), (255, 0, 0)
         black, player1, player2, grey = (0, 0, 0), (182, 213, 59), (163, 97, 44), (175, 175, 175)
 
@@ -538,7 +404,7 @@ class Game(BoardUtilities):
         # First we search the winner player
         for player in self.players:
             if player.winner:
-                for winner_amazon in player.amazons_IDs:
+                for winner_amazon in player.amazons_ids:
                     if self.amazons[winner_amazon].can_move:
                         # For each amazon of the winner player that can move a iteration is started using it's neighbors
                         row = self.amazons[winner_amazon].row
@@ -563,7 +429,7 @@ class Game(BoardUtilities):
                 self.players[player].active = False
                 self.players[player].winner = False
                 self.players[player].number_of_amazons = self.number_of_amazons_per_player
-                self.players[player].amazons_IDs = []
+                self.players[player].amazons_ids = []
                 if self.players[player].score < min_score:
                     min_score = self.players[player].score
                     player_with_min_score = player
@@ -577,45 +443,72 @@ class Game(BoardUtilities):
                     player.active = True
                 player.winner = False
                 player.number_of_amazons = self.number_of_amazons_per_player
-                player.amazons_IDs = []
+                player.amazons_ids = []
         self.board_data = self.fill_new_board()
 
     def draw_menu(self):
         pygame.init()  # Prepare the pygame module for use
         pygame.display.set_caption("LlucSF's Amazons")
+        self.menu_surface = screenSize(600, 200)
+        pygame.display.update()
+
+        self.menu_surface.fill((255, 255, 255))
+        my_font = pygame.font.SysFont('Arial', 26)
+
+        button1 = (420, 20, 160, 75)
+        text_button1 = my_font.render("Load game", False, (0, 0, 0))
+        pygame.draw.rect(self.menu_surface, (190, 190, 190), button1, 0)
+        pygame.draw.rect(self.menu_surface, (50, 50, 50), button1, 1)
+        self.menu_surface.blit(text_button1, (449, 40))
+
+        button2 = (420, 105, 160, 75)
+        text_button2 = my_font.render("Start game", False, (0, 0, 0))
+        pygame.draw.rect(self.menu_surface, (190, 190, 190), button2, 0)
+        pygame.draw.rect(self.menu_surface, (50, 50, 50), button2, 1)
+        self.menu_surface.blit(text_button2, (448, 125))
+
+        textbox1 = makeTextBox(20, 140, 160, 0, "Player 1 name", 15, 24)
+        textbox2 = makeTextBox(220, 140, 160, 0, "Player 2 name", 15, 24)
+        showTextBox(textbox1)
+        showTextBox(textbox2)
+
+        wordlabel_1 = makeLabel("", 24, 20, 110, background="white")
+        wordlabel_2 = makeLabel("", 24, 220, 110, background="white")
+        showLabel(wordlabel_1)
+        showLabel(wordlabel_2)
+
         while True:
-            self.menu_surface = pygame.display.set_mode((600, 200))
-            self.menu_surface.fill((255, 255, 255))
-
-            my_font = pygame.font.SysFont('Arial', 26)
-
-            button1 = (420, 20, 160, 75)
-            text_button1 = my_font.render("Load game", False, (0, 0, 0))
-            pygame.draw.rect(self.menu_surface, (190, 190, 190), button1, 0)
-            pygame.draw.rect(self.menu_surface, (50, 50, 50), button1, 1)
-            self.menu_surface.blit(text_button1, (449, 40))
-
-            button2 = (420, 105, 160, 75)
-            text_button2 = my_font.render("Start game", False, (0, 0, 0))
-            pygame.draw.rect(self.menu_surface, (190, 190, 190), button2, 0)
-            pygame.draw.rect(self.menu_surface, (50, 50, 50), button2, 1)
-            self.menu_surface.blit(text_button2, (448, 125))
-
-            pygame.display.flip()
 
             ev = pygame.event.poll()  # Look for any event
             if ev.type == pygame.MOUSEBUTTONUP and ev.button == 1:
                 mouse_x, mouse_y = pygame.mouse.get_pos()
+
                 if 580 > mouse_x > 420 and 180 > mouse_y > 105:
                     self.start_and_play_new_game()
                     break
 
                 if 580 > mouse_x > 420 and 95 > mouse_y > 20:
                     self.load_previous_game()
+                    break
+
+                if 180 > mouse_x > 20 and 180 > mouse_y > 140:
+                    text_input1 = copy.deepcopy(textBoxInput(textbox1))
+                    self.players[0].name = text_input1
+                    changeLabel(wordlabel_1, "                               ")
+                    wordlabel_1 = makeLabel(str(text_input1)[:19], 24, 20, 110, background="white")
+                    showLabel(wordlabel_1)
+
+                if 380 > mouse_x > 220 and 180 > mouse_y > 140:
+                    text_input2 = copy.deepcopy(textBoxInput(textbox2))
+                    self.players[1].name = text_input2
+                    changeLabel(wordlabel_2, "                                ")
+                    wordlabel_2 = makeLabel(str(text_input2)[:19], 24, 220, 110, background="white")
+                    showLabel(wordlabel_2)
 
             if ev.type == pygame.QUIT:
                 pygame.quit()
                 break
+
 
     def load_previous_game(self):
         self.load_game = True
@@ -670,25 +563,3 @@ class Game(BoardUtilities):
         self.saved_game = loaded_board_data
         self.board_data = self.fill_new_board()
         self.start_and_play_new_game()
-
-###############################################################################################################
-###############################################################################################################
-###############################################################################################################
-
-
-def main(names, scores, max_score, cells_per_side, first_player):
-    my_game = Game(max_score, names, scores, first_player - 1, cells_per_side)
-    my_game.draw_menu()
-    return print("Bye!")
-
-
-name = ["Júlia", "Lluc"]
-
-# score = [9, 4]
-
-score = [0, 0]
-main(names=name, scores=score, max_score=50, cells_per_side=4,
-     first_player=1)
-
-
-
