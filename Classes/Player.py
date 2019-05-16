@@ -1,5 +1,4 @@
 
-
 class Player:
     def __init__(self, player_name, player_score, player_number, number_of_amazons):
         self.score = player_score
@@ -11,5 +10,4 @@ class Player:
         self.winner = False
 
     def add_score(self, new_score):
-        self.score = self.score + new_score
-
+        self.score += new_score

@@ -1,18 +1,18 @@
 
 import copy
 import networkx as nx
-import pygame
 import pygame.freetype
 from tkinter import Tk
 from tkinter.filedialog import askopenfilename
-from Classes.pygame_functions import *
+from .pygame_functions import *
 from .BoardUtilities import BoardUtilities
 from .Amazons import Amazon
 from .Player import Player
 
 
 class Game(BoardUtilities):
-    def __init__(self, max_score, previous_scores, first_player, cells_per_side):
+    def __init__(self, max_score, previous_scores, first_player, cells_per_side, list_of_names):
+        super().__init__()
         self.play_again = True
         self.end_game = False
         self.its_a_draw = False
@@ -26,23 +26,19 @@ class Game(BoardUtilities):
         self.board_origin = self.margin / 2
         self.cell_size = self.board_sz / self.cells_per_side
         self.surface = None
-        self.menu_surface = None
         self.total_number_of_amazons = self.cells_per_side - 2
         self.number_of_amazons_per_player = int(self.total_number_of_amazons/2)
         self.score_graph = nx.Graph()  # graph used to compute the final score at each ended round
 
         # Player instances
         self.players = []
-        list_of_names = []
-        list_of_names.append("Player 1")
-        list_of_names.append("Player 2")
         for i in range(2):
             self.players.append(Player(list_of_names[i], previous_scores[i], i, self.number_of_amazons_per_player))
         self.players[first_player].active = True
 
         # Amazon instances
         self.amazons = []
-        self.board_data = None
+        self.board_data = self.fill_new_board()
 
     # Exchanges the active players, refresh the immobilized amazon numbers and check if there's already a winner
     def next_turn(self):
@@ -95,9 +91,7 @@ class Game(BoardUtilities):
     def start_and_play_new_game(self):
         pygame.init()  # Prepare the pygame module for use
         pygame.display.set_caption("LlucSF's Amazons")
-        if not self.load_game:
-            self.board_data = self.board_data = self.fill_new_board()
-        # Draw the board for the first time
+
         self.draw_board()
 
         while self.players[0].score < self.max_score and self.players[1].score < self.max_score:  # while no abs winner
@@ -137,9 +131,8 @@ class Game(BoardUtilities):
                         self.draw_board()
 
                     if ev.key == pygame.K_s:
-                        self.players[0].score += 1
-                        self.players[1].score += 1
-                        self.draw_board()
+                        self.save_game()
+                        break
 
             if new_event:
                 self.draw_board()
@@ -165,7 +158,6 @@ class Game(BoardUtilities):
         if self.load_game:
             board_data = copy.deepcopy(self.saved_game)
             self.cell_size = self.board_sz / self.cells_per_side
-            print(self.cells_per_side)
 
         else:
             # Load the initial board for each allowed number of cells_per_side
@@ -227,7 +219,7 @@ class Game(BoardUtilities):
     # Draw all the graphics of the game
     def draw_board(self):
         # Define colours in rgb
-        self.surface = screenSize(self.surface_sz, self.surface_sz)
+        self.surface = screenSize(self.surface_sz, self.surface_sz, 50, 50)
         white, light_blue, turquoise, red = (255, 255, 255), (224, 255, 255), (95, 158, 160), (255, 0, 0)
         black, player1, player2, grey = (0, 0, 0), (182, 213, 59), (163, 97, 44), (175, 175, 175)
 
@@ -446,120 +438,21 @@ class Game(BoardUtilities):
                 player.amazons_ids = []
         self.board_data = self.fill_new_board()
 
-    def draw_menu(self):
-        pygame.init()  # Prepare the pygame module for use
-        pygame.display.set_caption("LlucSF's Amazons")
-        self.menu_surface = screenSize(600, 200)
-        pygame.display.update()
-
-        self.menu_surface.fill((255, 255, 255))
-        my_font = pygame.font.SysFont('Arial', 26)
-
-        button1 = (420, 20, 160, 75)
-        text_button1 = my_font.render("Load game", False, (0, 0, 0))
-        pygame.draw.rect(self.menu_surface, (190, 190, 190), button1, 0)
-        pygame.draw.rect(self.menu_surface, (50, 50, 50), button1, 1)
-        self.menu_surface.blit(text_button1, (449, 40))
-
-        button2 = (420, 105, 160, 75)
-        text_button2 = my_font.render("Start game", False, (0, 0, 0))
-        pygame.draw.rect(self.menu_surface, (190, 190, 190), button2, 0)
-        pygame.draw.rect(self.menu_surface, (50, 50, 50), button2, 1)
-        self.menu_surface.blit(text_button2, (448, 125))
-
-        textbox1 = makeTextBox(20, 140, 160, 0, "Player 1 name", 15, 24)
-        textbox2 = makeTextBox(220, 140, 160, 0, "Player 2 name", 15, 24)
-        showTextBox(textbox1)
-        showTextBox(textbox2)
-
-        wordlabel_1 = makeLabel("", 24, 20, 110, background="white")
-        wordlabel_2 = makeLabel("", 24, 220, 110, background="white")
-        showLabel(wordlabel_1)
-        showLabel(wordlabel_2)
-
-        while True:
-
-            ev = pygame.event.poll()  # Look for any event
-            if ev.type == pygame.MOUSEBUTTONUP and ev.button == 1:
-                mouse_x, mouse_y = pygame.mouse.get_pos()
-
-                if 580 > mouse_x > 420 and 180 > mouse_y > 105:
-                    self.start_and_play_new_game()
-                    break
-
-                if 580 > mouse_x > 420 and 95 > mouse_y > 20:
-                    self.load_previous_game()
-                    break
-
-                if 180 > mouse_x > 20 and 180 > mouse_y > 140:
-                    text_input1 = copy.deepcopy(textBoxInput(textbox1))
-                    self.players[0].name = text_input1
-                    changeLabel(wordlabel_1, "                               ")
-                    wordlabel_1 = makeLabel(str(text_input1)[:19], 24, 20, 110, background="white")
-                    showLabel(wordlabel_1)
-
-                if 380 > mouse_x > 220 and 180 > mouse_y > 140:
-                    text_input2 = copy.deepcopy(textBoxInput(textbox2))
-                    self.players[1].name = text_input2
-                    changeLabel(wordlabel_2, "                                ")
-                    wordlabel_2 = makeLabel(str(text_input2)[:19], 24, 220, 110, background="white")
-                    showLabel(wordlabel_2)
-
-            if ev.type == pygame.QUIT:
-                pygame.quit()
-                break
-
-
-    def load_previous_game(self):
-        self.load_game = True
+    def save_game(self):
         Tk().withdraw()
         file_name = askopenfilename()
-        file = open(str(file_name), "r")
-        index = file.readline()
-        index = int(index.strip())
-        self.cells_per_side = index
-        loaded_board_data = []
-        for i in range(0, index):
-            tmp = file.readline()
-            tmp = tmp.strip()
-            tmp = tmp.split()
-            tmp2 = []
-            for j in range(0, index):
-                tmp2.append(int(tmp[j]))
-            loaded_board_data.append(tmp2)
-        print(str(loaded_board_data))
-        # Read names
-        tmp = file.readline()
-        tmp = tmp.strip()
-        tmp = tmp.split()
-        self.players[0].name = str(tmp[0])
-        self.players[1].name = str(tmp[1])
-
-        # Read max score
-        tmp = file.readline()
-        tmp = tmp.strip()
-        tmp = tmp.split()
-        self.max_score = int(tmp[0])
-
-        # Read current scores
-        tmp = file.readline()
-        tmp = tmp.strip()
-        tmp = tmp.split()
-        self.players[0].score = int(tmp[0])
-        self.players[1].score = int(tmp[1])
-
-        # Read active player
-        tmp = file.readline()
-        tmp = tmp.strip()
-        tmp = tmp.split()
-        tmp = int(tmp[0])
-        if tmp == 1:
-            self.players[0].active = True
-            self.players[1].active = False
-        else:
-            self.players[0].active = False
-            self.players[1].active = True
-
-        self.saved_game = loaded_board_data
-        self.board_data = self.fill_new_board()
-        self.start_and_play_new_game()
+        if file_name:
+            file = open(str(file_name), "w")
+            file.writelines(str(self.cells_per_side) + "\n")
+            for i in range(self.cells_per_side):
+                tmp = []
+                for j in range(self.cells_per_side):
+                    tmp.append(str(str(self.board_data[i][j]) + " "))
+                tmp.append("\n")
+                file.writelines(tmp)
+            file.writelines(str(self.players[0].name + " " + self.players[1].name + "\n"))
+            file.writelines(str(self.max_score) + "\n")
+            file.writelines(str(str(self.players[0].score) + " " + str(self.players[1].score) + "\n"))
+            for i in range(2):
+                if self.players[i].active:
+                    file.writelines(str(i))

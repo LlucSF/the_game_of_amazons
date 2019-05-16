@@ -5,6 +5,11 @@ from math import trunc
 
 
 class BoardUtilities:  # global class containing general utilites for other classes
+    def __init__(self):
+        self.margin = None
+        self.cell_size = None
+        self.cells_per_side = None
+
     def get_cell_from_click(self):
         # Get mouse position and transform it into row/column
         x_mouse, y_mouse = pygame.mouse.get_pos()
@@ -24,4 +29,3 @@ class BoardUtilities:  # global class containing general utilites for other clas
             print("You are clicking out of the board!")
             return False
         return row, column
-

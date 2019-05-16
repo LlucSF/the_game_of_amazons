@@ -10,9 +10,9 @@ import pygame.freetype
 from .BoardUtilities import BoardUtilities
 
 
-
 class Amazon(BoardUtilities):
     def __init__(self, row, column, player, amazon_id, margin, cell_size, cell_per_side):
+        super().__init__()
         self.row = row
         self.column = column
         self.player = player
@@ -107,6 +107,3 @@ class Amazon(BoardUtilities):
         if self.shoot_done:
             board_data[new_pos[0]][new_pos[1]] = 3
         return board_data
-
-
-

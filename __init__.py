@@ -1,13 +1,7 @@
 
 
-from Classes.Game import Game
+from Classes.Menu import Menu
 
-
-names = ["Júlia", "Lluc"]
-scores = [0, 0]
-max_score = 20
-first_player = 2
-cells_per_side = 10
-
-my_game = Game(max_score, scores, first_player - 1, cells_per_side)
-my_game.draw_menu()
+new_menu = Menu()
+new_menu.draw_menu()
+new_menu.menu_gui()
