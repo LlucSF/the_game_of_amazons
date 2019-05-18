@@ -122,7 +122,7 @@ class Menu:
                 if (226+160) > mouse_x > 225 and (200+75) > mouse_y > 200:
                     new_game = Game(max_score=self.max_score, previous_scores=self.player_scores,
                                     first_player=self.active_player, cells_per_side=self.cells_per_side,
-                                    list_of_names=self.player_names)
+                                    list_of_names=self.player_names,load_game=False,saved_game=None)
                     new_game.start_and_play_new_game()
                     self.draw_menu()
 
@@ -175,7 +175,6 @@ class Menu:
                 for j in range(0, index):
                     tmp2.append(int(tmp[j]))
                 loaded_board_data.append(tmp2)
-            print(loaded_board_data)
 
             # Read names
             tmp = file.readline()
@@ -205,13 +204,7 @@ class Menu:
             # Create a new game instance
             loaded_game = Game(max_score=self.max_score, previous_scores=self.player_scores,
                                first_player=self.active_player, cells_per_side=self.cells_per_side,
-                               list_of_names=self.player_names)
-
-            # Activate the load_game flag and fill the board with the loaded data
-            loaded_game.load_game = True
-            loaded_game.saved_game = loaded_board_data
-            loaded_game.board_data = loaded_game.fill_new_board()
-            loaded_game.load_game = False   # Deactivate the flag
+                               list_of_names=self.player_names, load_game=True, saved_game=loaded_board_data)
             loaded_game.start_and_play_new_game()
             return True
         return False
