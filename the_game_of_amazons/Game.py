@@ -8,17 +8,18 @@ from .pygame_functions import *
 from .BoardUtilities import BoardUtilities
 from .Amazon import Amazon
 from .Player import Player
+import matplotlib.pyplot as plt
 
 
 class Game(BoardUtilities):
-    def __init__(self, max_score, previous_scores, first_player, cells_per_side, list_of_names):
+    def __init__(self, max_score, previous_scores, first_player, cells_per_side, list_of_names, load_game, saved_game):
         super().__init__()
         self.play_again = True
         self.end_game = False
         self.its_a_draw = False
-        self.load_game = False
+        self.load_game = load_game
         self.max_score = max_score  # max score a player can reach
-        self.saved_game = None
+        self.saved_game = saved_game
         self.cells_per_side = cells_per_side
         self.surface_sz = 600  # surface is gonna be 600x600
         self.board_sz = 480  # board is gonna be 480x480
@@ -26,19 +27,34 @@ class Game(BoardUtilities):
         self.board_origin = self.margin / 2
         self.cell_size = self.board_sz / self.cells_per_side
         self.surface = None
-        self.total_number_of_amazons = self.cells_per_side - 2
-        self.number_of_amazons_per_player = int(self.total_number_of_amazons/2)
+        self.total_number_of_amazons = None
+        self.number_of_amazons_per_player = None
         self.score_graph = nx.Graph()  # graph used to compute the final score at each ended round
-
-        # Player instances
-        self.players = []
-        for i in range(2):
-            self.players.append(Player(list_of_names[i], previous_scores[i], i, self.number_of_amazons_per_player))
-        self.players[first_player].active = True
+        self.board_data = self.fill_new_board()
 
         # Amazon instances
         self.amazons = []
-        self.board_data = self.fill_new_board()
+        amazon_id = 0
+        for i in range(0, self.cells_per_side):
+            for j in range(0, self.cells_per_side):
+                if self.board_data[i][j] == 1:
+                    self.amazons.append(Amazon(i, j, 1, amazon_id, self.margin, self.cell_size, self.cells_per_side))
+                    amazon_id = amazon_id + 1
+                if self.board_data[i][j] == 2:
+                    self.amazons.append(Amazon(i, j, 2, amazon_id, self.margin, self.cell_size, self.cells_per_side))
+                    amazon_id = amazon_id + 1
+        self.total_number_of_amazons = amazon_id
+        self.number_of_amazons_per_player = int(self.total_number_of_amazons / 2)
+
+        # Player instances
+        self.players = []
+        for player in range(2):
+            self.players.append(Player(list_of_names[player], previous_scores[player],
+                                       player, self.number_of_amazons_per_player))
+            for amazon in self.amazons:
+                if amazon.player == (player+1):
+                    self.players[player].amazons_ids.append(amazon.id)
+        self.players[first_player].active = True
 
     # Exchanges the active players, refresh the immobilized amazon numbers and check if there's already a winner
     def next_turn(self):
@@ -155,6 +171,7 @@ class Game(BoardUtilities):
         if self.load_game:
             board_data = copy.deepcopy(self.saved_game)
             self.cell_size = self.board_sz / self.cells_per_side
+            self.load_game = False
 
         else:
             # Load the initial board for each allowed number of cells_per_side
@@ -197,20 +214,6 @@ class Game(BoardUtilities):
             else:
                 return print("Only 4x4, 6x6 ,8x8 and 10x10 games are allowed")
 
-        # Fill the amazon instances with the board data and clear the previous ones
-        self.amazons = []
-        amazon_id = 0
-        for i in range(0, self.cells_per_side):
-            for j in range(0, self.cells_per_side):
-                if board_data[i][j] == 1:
-                    self.amazons.append(Amazon(i, j, 1, amazon_id, self.margin, self.cell_size, self.cells_per_side))
-                    self.players[0].amazons_ids.append(amazon_id)
-                    amazon_id = amazon_id + 1
-                if board_data[i][j] == 2:
-                    self.amazons.append(Amazon(i, j, 2, amazon_id, self.margin, self.cell_size, self.cells_per_side))
-                    self.players[1].amazons_ids.append(amazon_id)
-                    amazon_id = amazon_id + 1
-        self.total_number_of_amazons = amazon_id
         return board_data
 
     # Draw all the graphics of the game
@@ -373,9 +376,13 @@ class Game(BoardUtilities):
         return empty_cells
 
     # Keeps iterating into the score graph searching for new nodes using the check_cell_surroundings function
-    def cell_propagation_iterator(self, empty_neighbors):
+    def cell_propagation_iterator(self, test_cell, empty_neighbors):
         # Add the previous empty_neighbors to the graph
+        self.score_graph.add_node(test_cell)
         self.score_graph.add_nodes_from(empty_neighbors)
+
+        for empty_cell in empty_neighbors:
+            self.score_graph.add_edge(test_cell, empty_cell)
 
         for new_row, new_col in empty_neighbors:
             # For each of them, it's empty neighbors are searched ...
@@ -389,31 +396,39 @@ class Game(BoardUtilities):
 
             # With the neighbors not included in the graph (if any) a new iteration starts
             if len(non_repeated_new_empty_neighbors) != 0:
-                print(new_empty_neighbors)
-                self.cell_propagation_iterator(new_empty_neighbors)
+                self.cell_propagation_iterator((new_row, new_col), new_empty_neighbors)
+            else:
+                for new_empty_cell in new_empty_neighbors:
+                    self.score_graph.add_edge((new_row, new_col), new_empty_cell)
 
     # Score calculating function
     def get_score_from_cells(self):
         # First we search the winner player
         for player in self.players:
             if player.winner:
+                free_amazons = 0
                 for winner_amazon in player.amazons_ids:
                     if self.amazons[winner_amazon].can_move:
                         # For each amazon of the winner player that can move a iteration is started using it's neighbors
+                        free_amazons += 1
                         row = self.amazons[winner_amazon].row
                         col = self.amazons[winner_amazon].column
                         empty_neighbors = self.check_cell_surroundings(row, col)
-                        print(empty_neighbors)
-                        self.cell_propagation_iterator(empty_neighbors)
+                        self.cell_propagation_iterator(str(player.name + " " + str(winner_amazon)), empty_neighbors)
 
         # Return the total number of nodes, which is the number of cells a winner player can still move into,
         # and that's exactly the definition of the score
-        return self.score_graph.number_of_nodes()
+        plt.clf()
+        nx.draw(self.score_graph, with_labels=1)
+        plt.show()
+        return self.score_graph.number_of_nodes() - free_amazons
 
     # Prepares the game for new game
     def reset_game(self):
         self.score_graph = nx.Graph()
         self.end_game = False
+
+        # If its a draw, the next turn will be for the player with lowest score
         if self.its_a_draw:
             self.its_a_draw = False
             min_score = self.max_score
@@ -428,6 +443,7 @@ class Game(BoardUtilities):
                     player_with_min_score = player
             self.players[player_with_min_score].active = True
 
+        # Else, the looser starts
         else:
             for player in self.players:
                 if player.winner:
@@ -437,7 +453,31 @@ class Game(BoardUtilities):
                 player.winner = False
                 player.number_of_amazons = self.number_of_amazons_per_player
                 player.amazons_ids = []
+
+        # Fill the board with the default data
         self.board_data = self.fill_new_board()
+
+        # Restarting amazons
+        del self.amazons
+        self.amazons = []
+        amazon_id = 0
+        for i in range(0, self.cells_per_side):
+            for j in range(0, self.cells_per_side):
+                if self.board_data[i][j] == 1:
+                    self.amazons.append(Amazon(row=i, column=j, player=1, amazon_id=amazon_id, margin=self.margin,
+                                               cell_size=self.cell_size, cell_per_side=self.cells_per_side))
+                    amazon_id = amazon_id + 1
+
+                if self.board_data[i][j] == 2:
+                    self.amazons.append(Amazon(row=i, column=j, player=2, amazon_id=amazon_id, margin=self.margin,
+                                               cell_size=self.cell_size, cell_per_side=self.cells_per_side))
+                    amazon_id = amazon_id + 1
+
+        # Assigning new amazon ids to players
+        for player in range(2):
+            for amazon in self.amazons:
+                if amazon.player == (player + 1):
+                    self.players[player].amazons_ids.append(amazon.id)
 
     def save_game(self):
         Tk().withdraw()
