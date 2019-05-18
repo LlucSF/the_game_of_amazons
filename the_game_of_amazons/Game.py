@@ -6,7 +6,7 @@ from tkinter import Tk
 from tkinter.filedialog import askopenfilename
 from .pygame_functions import *
 from .BoardUtilities import BoardUtilities
-from .Amazons import Amazon
+from .Amazon import Amazon
 from .Player import Player
 
 
@@ -100,7 +100,6 @@ class Game(BoardUtilities):
 
             if ev.type != pygame.NOEVENT:
                 if ev.type == pygame.QUIT:  # Window close button clicked?
-                    # self.save_data()
                     break  # ... leave game loop
 
                 if ev.type == pygame.MOUSEBUTTONUP:
@@ -150,8 +149,6 @@ class Game(BoardUtilities):
                     self.draw_board()
                 else:
                     break
-
-        pygame.quit()  # Once we leave the loop, close the window.
 
     # Returns a predefined board data and creates Amazon class instances.
     def fill_new_board(self):
@@ -220,11 +217,12 @@ class Game(BoardUtilities):
     def draw_board(self):
         # Define colours in rgb
         self.surface = screenSize(self.surface_sz, self.surface_sz, 50, 50)
+        pygame.display.set_caption("The game of amazons")
         white, light_blue, turquoise, red = (255, 255, 255), (224, 255, 255), (95, 158, 160), (255, 0, 0)
         black, player1, player2, grey = (0, 0, 0), (182, 213, 59), (163, 97, 44), (175, 175, 175)
 
         # painting the surface, the contour of the board and creating the text elements
-        self.surface.fill(white)
+        self.surface.fill((205, 133, 63))
         board_contour = (self.board_origin - 1, self.board_origin - 1, self.board_sz + 2, self.board_sz + 2)
         pygame.draw.rect(self.surface, black, board_contour, 1)
 
@@ -244,6 +242,8 @@ class Game(BoardUtilities):
 
         text_surface.append(
             my_font.render("Max score:  " + str(self.max_score), False, (0, 0, 0)))
+        text_surface.append(my_font.render("Press 'S' to save and quit the game. Game must be saved in a .txt file.",
+                                           False, (0, 0, 0)))
 
         # painting the floor like a chess board
         for row in range(0, self.cells_per_side, 2):
@@ -253,7 +253,7 @@ class Game(BoardUtilities):
                     self.board_origin + (self.cell_size * row),
                     self.cell_size,
                     self.cell_size)
-                self.surface.fill(grey, small_rect)
+                self.surface.fill((188, 143, 143), small_rect)
 
         for row in range(1, self.cells_per_side + 1, 2):
             for col in range(1, self.cells_per_side + 1, 2):
@@ -262,7 +262,7 @@ class Game(BoardUtilities):
                     self.board_origin + (self.cell_size * row),
                     self.cell_size,
                     self.cell_size)
-                self.surface.fill(grey, small_rect)
+                self.surface.fill((188, 143, 143), small_rect)
 
         for row in range(0, self.cells_per_side, 2):
             for col in range(1, self.cells_per_side + 1, 2):
@@ -323,10 +323,11 @@ class Game(BoardUtilities):
                     pygame.draw.circle(self.surface, red, amazon, round(self.cell_size / 6) + 2, 2)
 
         # Now the surface is ready, tell pygame to display it!
-        self.surface.blit(text_surface[0], (10, 10))
-        self.surface.blit(text_surface[1], (10, 30))
+        self.surface.blit(text_surface[0], (self.margin-self.cell_size, 10))
+        self.surface.blit(text_surface[1], (self.margin-self.cell_size, 30))
         self.surface.blit(text_surface[2], (int(round(self.surface_sz / 2)), 30))
         self.surface.blit(text_surface[3], (int(round(self.surface_sz / 2)), 10))
+        self.surface.blit(text_surface[4], (self.margin-self.cell_size, self.board_sz+int(round(self.margin/1.5))))
         pygame.display.flip()
 
     # For a given cell_row and cell_column, checks if there's an amazon,
