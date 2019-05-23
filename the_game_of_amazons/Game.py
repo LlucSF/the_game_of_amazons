@@ -9,12 +9,14 @@ from .BoardUtilities import BoardUtilities
 from .Amazon import Amazon
 from .Player import Player
 import matplotlib.pyplot as plt
+from matplotlib.pyplot import ion
 
 
 class Game(BoardUtilities):
     def __init__(self, max_score, previous_scores, first_player, cells_per_side, list_of_names, load_game, saved_game):
         super().__init__()
         self.play_again = True
+        self.royal_end = False
         self.end_game = False
         self.its_a_draw = False
         self.load_game = load_game
@@ -56,6 +58,13 @@ class Game(BoardUtilities):
                     self.players[player].amazons_ids.append(amazon.id)
         self.players[first_player].active = True
 
+        # Creating amazons name dictionary
+        self.amazon_names_book = []
+        for player in self.players:
+            for id in player.amazons_ids:
+                self.amazon_names_book.append(str(str(player.name) + str(id)))
+        print(self.amazon_names_book)
+
     # Exchanges the active players, refresh the immobilized amazon numbers and check if there's already a winner
     def next_turn(self):
         # Exchange the turn
@@ -72,6 +81,9 @@ class Game(BoardUtilities):
         # Check for immobilized amazons
         self.check_immobilized_amazons()
 
+        # Draw before check end game
+        self.draw_board()
+        self.royal_chamber_identifier()
         # Check is the game is over
         self.check_end_game()
 
@@ -101,7 +113,7 @@ class Game(BoardUtilities):
                 i.can_move = True
                 self.players[i.player-1].number_of_amazons += 1
                 print("Amazon", str(i.id), "of player", i.player, "can move again!")
-                print("Player", i.player, "now move", self.players[i.player - 1].number_of_amazons, "amazons")
+                print("Player", i.player, "now move", self.players[i.player-1].number_of_amazons, "amazons")
 
     # Starting function of the game.
     def start_and_play_new_game(self):
@@ -150,6 +162,10 @@ class Game(BoardUtilities):
                         break
 
             if new_event:
+                self.draw_board()
+
+            if self.royal_end and self.play_again:
+                self.reset_game()
                 self.draw_board()
 
             if self.end_game:
@@ -376,13 +392,13 @@ class Game(BoardUtilities):
         return empty_cells
 
     # Keeps iterating into the score graph searching for new nodes using the check_cell_surroundings function
-    def cell_propagation_iterator(self, test_cell, empty_neighbors):
+    def cell_propagation_iterator(self, test_cell, empty_neighbors, graph):
         # Add the previous empty_neighbors to the graph
-        self.score_graph.add_node(test_cell)
-        self.score_graph.add_nodes_from(empty_neighbors)
+        graph.add_node(test_cell)
+        graph.add_nodes_from(empty_neighbors)
 
         for empty_cell in empty_neighbors:
-            self.score_graph.add_edge(test_cell, empty_cell)
+            graph.add_edge(test_cell, empty_cell)
 
         for new_row, new_col in empty_neighbors:
             # For each of them, it's empty neighbors are searched ...
@@ -391,22 +407,22 @@ class Game(BoardUtilities):
             # ... and those already in the graph are discarded
             non_repeated_new_empty_neighbors = []
             for node in new_empty_neighbors:
-                if not self.score_graph.has_node(node):
+                if not graph.has_node(node):
                     non_repeated_new_empty_neighbors.append(node)
 
             # With the neighbors not included in the graph (if any) a new iteration starts
             if len(non_repeated_new_empty_neighbors) != 0:
-                self.cell_propagation_iterator((new_row, new_col), new_empty_neighbors)
+                self.cell_propagation_iterator((new_row, new_col), new_empty_neighbors, graph)
             else:
                 for new_empty_cell in new_empty_neighbors:
-                    self.score_graph.add_edge((new_row, new_col), new_empty_cell)
+                    graph.add_edge((new_row, new_col), new_empty_cell)
 
     # Score calculating function
     def get_score_from_cells(self):
         # First we search the winner player
+        free_amazons = 0
         for player in self.players:
             if player.winner:
-                free_amazons = 0
                 for winner_amazon in player.amazons_ids:
                     if self.amazons[winner_amazon].can_move:
                         # For each amazon of the winner player that can move a iteration is started using it's neighbors
@@ -414,7 +430,8 @@ class Game(BoardUtilities):
                         row = self.amazons[winner_amazon].row
                         col = self.amazons[winner_amazon].column
                         empty_neighbors = self.check_cell_surroundings(row, col)
-                        self.cell_propagation_iterator(str(player.name + " " + str(winner_amazon)), empty_neighbors)
+                        self.cell_propagation_iterator(str(player.name + " " + str(winner_amazon)),
+                                                       empty_neighbors, self.score_graph)
 
         # Return the total number of nodes, which is the number of cells a winner player can still move into,
         # and that's exactly the definition of the score
@@ -427,6 +444,7 @@ class Game(BoardUtilities):
     def reset_game(self):
         self.score_graph = nx.Graph()
         self.end_game = False
+        self.royal_end = False
 
         # If its a draw, the next turn will be for the player with lowest score
         if self.its_a_draw:
@@ -479,6 +497,7 @@ class Game(BoardUtilities):
                 if amazon.player == (player + 1):
                     self.players[player].amazons_ids.append(amazon.id)
 
+    # Save the game in a .txt file
     def save_game(self):
         Tk().withdraw()
         file_name = askopenfilename()
@@ -497,3 +516,86 @@ class Game(BoardUtilities):
             for i in range(2):
                 if self.players[i].active:
                     file.writelines(str(i))
+
+    # Creates the board graph and looks for royal chambers
+    def royal_chamber_identifier(self):
+        plt.clf()   # Clear plot
+        ion()  # Keep the game running while figure is opened
+
+        # Graph of the whole board in the current turn
+        turn_graph = nx.Graph()
+        # For each players amazon iterate and grow the graph
+        for player in self.players:
+            for id in player.amazons_ids:
+                # First empty neighbors
+                empty_neighbors = self.check_cell_surroundings(self.amazons[id].row, self.amazons[id].column)
+                # Iterator
+                self.cell_propagation_iterator(str(str(player.name) + str(id)), empty_neighbors, self.amazons[id].domain)
+                # Compose the turn graph with each iterator graph
+                turn_graph = nx.compose(turn_graph, self.amazons[id].domain)
+        # Draw the turn graph
+        nx.draw(turn_graph, with_labels=1)
+        plt.show()
+        number_sub_graphs = len(list(nx.connected_component_subgraphs(turn_graph)))
+        print("Number of independent graphs: " + str(number_sub_graphs))
+
+        # If there are more than one sub-graph check if those are royal chambers
+        if number_sub_graphs > 1:
+            # Get the sub-graphs
+            sub_graphs = nx.connected_component_subgraphs(turn_graph)
+            royal_chamber_counter = 0
+            royal_chamber_ownership = []
+            players_in_graph = []
+            # For each sub-graph check if there are only one player
+            for graph in sub_graphs:
+                players_in_graph.clear()
+                entry = None
+                for entry in self.amazon_names_book:
+                    for node in graph.nodes:
+                        if node == entry:
+                            players_in_graph.append(entry[:-1])
+                if len(set(players_in_graph)) == 1:
+                    royal_chamber_counter += 1
+                    royal_chamber_ownership.append(players_in_graph[0])
+
+            # If all the sub graphs are royal chambers the game ends
+            if royal_chamber_counter == number_sub_graphs:
+                players_scores = [0, 0]
+                graph_index = 0
+                sub_graphs = nx.connected_component_subgraphs(turn_graph)
+                self.royal_end = True
+                for graph in sub_graphs:
+                    score = graph.number_of_nodes()
+                    if royal_chamber_ownership[graph_index] == self.players[0].name:
+                        players_scores[0] += score
+                        graph_index += 1
+                    elif royal_chamber_ownership[graph_index] == self.players[1].name:
+                        players_scores[1] += score
+                        graph_index += 1
+
+                # Print the number of cells each player has
+                print(str(str(self.players[0].name) + " has " +
+                          str(players_scores[0] - self.number_of_amazons_per_player) + " cells."))
+                print(str(str(self.players[1].name) + " has " +
+                          str(players_scores[1] - self.number_of_amazons_per_player) + " cells."))
+
+                # The highest scores the difference
+                if players_scores[0] > players_scores[1]:
+                    self.players[0].add_score(players_scores[0]-players_scores[1])
+                    self.players[0].winner = True
+                    self.players[1].winner = False
+                elif players_scores[1] > players_scores[0]:
+                    self.players[1].add_score(players_scores[1]-players_scores[0])
+                    self.players[1].winner = True
+                    self.players[0].winner = False
+                else:
+                    self.its_a_draw = True
+                    self.players[0].winner = False
+                    self.players[1].winner = False
+
+        # Reset the turn_graph
+        turn_graph.clear()
+
+        # Clear amazons individual graphs
+        for amazon in self.amazons:
+            amazon.domain.clear()

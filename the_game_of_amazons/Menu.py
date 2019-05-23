@@ -87,7 +87,7 @@ class Menu:
         self.menu_surface.blit(text_button2, (240, 220))
 
         # Player name inputs
-        text_text_boxes = my_normal_font.render("Player names:", False, (0, 0, 0))
+        text_text_boxes = my_normal_font.render("Players names:", False, (0, 0, 0))
         self.menu_surface.blit(text_text_boxes, (20, 70))
         self.textbox_1 = makeTextBox(20, 100, 160, 0, self.player_names[0], 15, 22)
         self.textbox_2 = makeTextBox(20, 150, 160, 0, self.player_names[1], 15, 22)

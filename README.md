@@ -66,7 +66,7 @@ The game ends when a player has all its amazons surrounded by fire or other amaz
 You can save a game anytime you want in a .txt file by pressing 'S'. Then you can load it from the menu screen.
 
 For more information about the game, its rules or history check the following section.
-Enjoy!
+Please, enjoy the game! I'm super-proud of it!
 
 ## About the game
 History and rules: https://en.wikipedia.org/wiki/Game_of_the_Amazons

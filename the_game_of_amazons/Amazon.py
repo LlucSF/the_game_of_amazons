@@ -8,6 +8,7 @@ Created on Tue May  7 17:01:15 2019
 import pygame
 import pygame.freetype
 from .BoardUtilities import BoardUtilities
+import networkx as nx
 
 
 class Amazon(BoardUtilities):
@@ -24,6 +25,7 @@ class Amazon(BoardUtilities):
         self.r_shoot = False
         self.shoot_done = False
         self.can_move = True
+        self.domain = nx.Graph()
 
     def move_amazon(self, board_data):
         waiting_new_click = True
