@@ -15,10 +15,11 @@ from matplotlib.pyplot import ion
 class Game(BoardUtilities):
     def __init__(self, max_score, previous_scores, first_player, cells_per_side, list_of_names, load_game, saved_game):
         super().__init__()
-        self.play_again = True
+        self.play_again = False
         self.royal_end = False
         self.end_game = False
         self.its_a_draw = False
+        self.quit = False
         self.load_game = load_game
         self.max_score = max_score  # max score a player can reach
         self.saved_game = saved_game
@@ -122,13 +123,13 @@ class Game(BoardUtilities):
 
         self.draw_board()
 
-        while self.players[0].score < self.max_score and self.players[1].score < self.max_score:  # while no abs winner
+        while self.players[0].score < self.max_score and self.players[1].score < self.max_score and not self.quit:
             new_event = False  # Down the draw flag
             ev = pygame.event.poll()  # Look for any event
 
             if ev.type != pygame.NOEVENT:
-                if ev.type == pygame.QUIT:  # Window close button clicked?
-                    break  # ... leave game loop
+                if ev.type == pygame.QUIT:
+                    self.quit = True
 
                 if ev.type == pygame.MOUSEBUTTONUP:
                     clicked_cell = self.get_cell_from_click()
@@ -164,9 +165,26 @@ class Game(BoardUtilities):
             if new_event:
                 self.draw_board()
 
-            if self.royal_end and self.play_again:
-                self.reset_game()
-                self.draw_board()
+            if self.royal_end:
+                self.draw_winner_message()
+                while not self.play_again:
+                    ev = pygame.event.poll()
+                    if ev.type != pygame.NOEVENT:
+                        if ev.type == pygame.QUIT:
+                            self.quit = True
+                            break
+                        if ev.type == pygame.KEYDOWN:
+                            if ev.key == pygame.K_q:
+                                self.quit = True
+                                break
+                            if ev.key == pygame.K_s:
+                                self.save_game()
+                                break
+                            if ev.key == pygame.K_y:
+                                self.play_again = True
+                                self.reset_game()
+                                self.draw_board()
+                self.play_again = False
 
             if self.end_game:
                 # Add score to the winner player
@@ -175,12 +193,25 @@ class Game(BoardUtilities):
                         new_score = self.get_score_from_cells()
                         i.add_score(new_score)
                         self.draw_board()
-
-                if self.play_again:
-                    self.reset_game()
-                    self.draw_board()
-                else:
-                    break
+                self.draw_winner_message()
+                while not self.play_again:
+                    ev = pygame.event.poll()
+                    if ev.type != pygame.NOEVENT:
+                        if ev.type == pygame.QUIT:
+                            self.quit = True
+                            break
+                        if ev.type == pygame.KEYDOWN:
+                            if ev.key == pygame.K_q:
+                                self.quit = True
+                                break
+                            if ev.key == pygame.K_s:
+                                self.save_game()
+                                break
+                            if ev.key == pygame.K_y:
+                                self.play_again = True
+                                self.reset_game()
+                                self.draw_board()
+                self.play_again = False
 
     # Returns a predefined board data and creates Amazon class instances.
     def fill_new_board(self):
@@ -528,13 +559,31 @@ class Game(BoardUtilities):
         for player in self.players:
             for id in player.amazons_ids:
                 # First empty neighbors
-                empty_neighbors = self.check_cell_surroundings(self.amazons[id].row, self.amazons[id].column)
+                amazon_cell = (self.amazons[id].row, self.amazons[id].column)
+                empty_neighbors = self.check_cell_surroundings(amazon_cell[0], amazon_cell[1])
+
                 # Iterator
-                self.cell_propagation_iterator(str(str(player.name) + str(id)), empty_neighbors, self.amazons[id].domain)
+                self.cell_propagation_iterator(str(str(player.name) + str(id)),
+                                               empty_neighbors,
+                                               self.amazons[id].domain)
+
                 # Compose the turn graph with each iterator graph
                 turn_graph = nx.compose(turn_graph, self.amazons[id].domain)
+
         # Draw the turn graph
-        nx.draw(turn_graph, with_labels=1)
+        # Creation of the positions dictionary
+        pos = {}
+        for n in turn_graph.nodes():
+            if type(n) is str:
+                for amazon in self.amazons:
+                    if str(self.players[amazon.player-1].name + str(amazon.id)) == n:
+                        page = (amazon.column, -amazon.row)
+                        break
+            else:
+                page = (n[1], -n[0])
+            pos[n] = page
+
+        nx.draw(turn_graph, pos, with_labels=1)
         plt.show()
         number_sub_graphs = len(list(nx.connected_component_subgraphs(turn_graph)))
         print("Number of independent graphs: " + str(number_sub_graphs))
@@ -599,3 +648,62 @@ class Game(BoardUtilities):
         # Clear amazons individual graphs
         for amazon in self.amazons:
             amazon.domain.clear()
+
+    # Draws the winner message
+    def draw_winner_message(self):
+        # Message box
+        message_origin = (self.surface_sz/5, self.surface_sz/3)
+        message_sz = (3*self.surface_sz/5, 1*self.surface_sz/3)
+        message_box = (message_origin[0], message_origin[1], message_sz[0], message_sz[1])
+        pygame.draw.rect(self.surface, (205, 133, 63), message_box, 0)
+        pygame.draw.rect(self.surface, (0, 0, 0), message_box, 1)
+
+        continue_box = ((message_origin[0] + message_sz[0]/19),
+                        (message_origin[1] + 5*message_sz[1]/9),
+                        5*message_sz[0]/19,
+                        3*message_sz[1]/9)
+        pygame.draw.rect(self.surface, (188, 143, 143), continue_box, 0)
+        pygame.draw.rect(self.surface, (50, 50, 50), continue_box, 1)
+
+        save_and_quit_box = ((message_origin[0] + 7*message_sz[0]/19),
+                             (message_origin[1] + 5*message_sz[1]/9),
+                             5*message_sz[0]/19,
+                             3*message_sz[1]/9)
+        pygame.draw.rect(self.surface, (188, 143, 143), save_and_quit_box, 0)
+        pygame.draw.rect(self.surface, (50, 50, 50), save_and_quit_box, 1)
+
+        quit_box = ((message_origin[0] + 13*message_sz[0]/19),
+                    (message_origin[1] + 5*message_sz[1]/9),
+                    5*message_sz[0]/19,
+                    3*message_sz[1]/9)
+        pygame.draw.rect(self.surface, (188, 143, 143), quit_box, 0)
+        pygame.draw.rect(self.surface, (50, 50, 50), quit_box, 1)
+
+        my_big_font = pygame.font.SysFont('Comic Sans MS', 30)
+        my_small_font = pygame.font.SysFont('Comic Sans MS', 15)
+        text_surface = list()
+        for player in self.players:
+            if player.winner:
+                text_surface.append(my_big_font.render(player.name + " is the winner!", False, (0, 0, 0)))
+        text_surface.append(my_small_font.render(str("Continue [y]"), False, (0, 0, 0)))
+        text_surface.append(my_small_font.render(str("Save [s]"), False, (0, 0, 0)))
+        text_surface.append(my_small_font.render(str("Quit [q]"), False, (0, 0, 0)))
+
+        self.surface.blit(text_surface[0],
+                          (message_origin[0] + 2*message_sz[0]/19,
+                           message_origin[1] + 2*message_sz[1]/9))
+
+        self.surface.blit(text_surface[1],
+                          (continue_box[0] + continue_box[2]/19,
+                           continue_box[1] + 3*continue_box[3]/9))
+
+        self.surface.blit(text_surface[2],
+                          (save_and_quit_box[0] + 4*save_and_quit_box[2]/19,
+                           save_and_quit_box[1] + 3*save_and_quit_box[3]/9))
+
+        self.surface.blit(text_surface[3],
+                          (quit_box[0] + 4*quit_box[2]/19,
+                           quit_box[1] + 3*quit_box[3]/9))
+
+        pygame.display.flip()
+
